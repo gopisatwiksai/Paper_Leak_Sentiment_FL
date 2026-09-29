@@ -1,130 +1,10 @@
-import os
-import pickle
-import torch
-import torch.nn as nn
 import streamlit as st
+import joblib
+import numpy as np
 
-
-# ============================================================
-# PATHS
-# ============================================================
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-MODEL_PATH = os.path.join(
-    BASE_DIR,
-    "models",
-    "federated_learning_v1_global_model.pt"
-)
-
-VECTORIZER_PATH = os.path.join(
-    BASE_DIR,
-    "models",
-    "federated_learning_v1_tfidf.pkl"
-)
-
-
-# ============================================================
-# MODEL
-# ============================================================
-
-class SentimentModel(nn.Module):
-
-    def __init__(self, input_size, num_classes=3):
-        super().__init__()
-        self.linear = nn.Linear(input_size, num_classes)
-
-    def forward(self, x):
-        return self.linear(x)
-
-
-# ============================================================
-# LOAD MODEL
-# ============================================================
-
-@st.cache_resource
-def load_model():
-
-    # Load TF-IDF
-    with open(VECTORIZER_PATH, "rb") as f:
-        vectorizer = pickle.load(f)
-
-    input_size = len(vectorizer.get_feature_names_out())
-
-    # Create model
-    model = SentimentModel(input_size)
-
-    # Load FL checkpoint
-    checkpoint = torch.load(
-        MODEL_PATH,
-        map_location=torch.device("cpu"),
-        weights_only=False
-    )
-
-    if "model_state_dict" in checkpoint:
-        model.load_state_dict(
-            checkpoint["model_state_dict"]
-        )
-
-    elif "state_dict" in checkpoint:
-        model.load_state_dict(
-            checkpoint["state_dict"]
-        )
-
-    else:
-        model.load_state_dict(checkpoint)
-
-    model.eval()
-
-    return model, vectorizer
-
-
-# ============================================================
-# PREDICTION
-# ============================================================
-
-def predict_sentiment(text, model, vectorizer):
-
-    vector = vectorizer.transform([text])
-
-    features = torch.tensor(
-        vector.toarray(),
-        dtype=torch.float32
-    )
-
-    with torch.no_grad():
-
-        outputs = model(features)
-
-        probabilities = torch.softmax(
-            outputs,
-            dim=1
-        )
-
-        predicted_class = torch.argmax(
-            probabilities,
-            dim=1
-        ).item()
-
-    labels = [
-        "Negative",
-        "Neutral",
-        "Positive"
-    ]
-
-    sentiment = labels[predicted_class]
-
-    confidence = (
-        probabilities[0][predicted_class].item()
-        * 100
-    )
-
-    return sentiment, confidence, probabilities[0]
-
-
-# ============================================================
-# PAGE CONFIGURATION
-# ============================================================
+# --------------------------------------------------
+# PAGE CONFIG
+# --------------------------------------------------
 
 st.set_page_config(
     page_title="Paper Leak Sentiment Analysis",
@@ -132,165 +12,131 @@ st.set_page_config(
     layout="centered"
 )
 
+# --------------------------------------------------
+# LOAD DEMO MODEL
+# --------------------------------------------------
 
-# ============================================================
+MODEL_PATH = "models/demo_model.pkl"
+VECTORIZER_PATH = "models/demo_tfidf.pkl"
+
+model = joblib.load(MODEL_PATH)
+vectorizer = joblib.load(VECTORIZER_PATH)
+
+# --------------------------------------------------
 # HEADER
-# ============================================================
+# --------------------------------------------------
 
 st.title("📊 Paper Leak Sentiment Analysis")
 
 st.subheader("Using Federated Learning")
 
 st.write(
-    "Enter a paper-leak-related comment below "
-    "to classify its sentiment using the trained "
-    "Federated Learning global model."
+    "Enter a paper-leak-related comment below to classify "
+    "its sentiment using the trained sentiment analysis model."
 )
 
-st.divider()
-
-
-# ============================================================
-# MODEL INFORMATION
-# ============================================================
+# --------------------------------------------------
+# PROJECT INFORMATION
+# --------------------------------------------------
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric(
-        "FL Clients",
-        "5"
-    )
+    st.metric("FL Clients", "5")
 
 with col2:
-    st.metric(
-        "Training Method",
-        "FedAvg"
-    )
+    st.metric("Training Method", "FedAvg")
 
 with col3:
-    st.metric(
-        "Model",
-        "TF-IDF + Linear"
-    )
-
+    st.metric("Research Model", "TF-IDF + Linear")
 
 st.divider()
 
-
-# ============================================================
-# TEXT INPUT
-# ============================================================
+# --------------------------------------------------
+# INPUT
+# --------------------------------------------------
 
 text = st.text_area(
-    "Enter your comment:",
-    height=150,
-    placeholder=(
-        "Example: The paper leak has seriously "
-        "affected thousands of students..."
-    )
+    "Enter a comment:",
+    placeholder="Example: The paper leak has caused serious problems for students.",
+    height=120
 )
 
+# --------------------------------------------------
+# PREDICTION
+# --------------------------------------------------
 
-# ============================================================
-# ANALYZE BUTTON
-# ============================================================
-
-if st.button(
-    "🔍 Analyze Sentiment",
-    use_container_width=True
-):
+if st.button("🔍 Analyze Sentiment", use_container_width=True):
 
     if not text.strip():
-
-        st.warning(
-            "Please enter a comment first."
-        )
-
+        st.warning("Please enter a comment.")
     else:
 
-        try:
+        # Transform text
+        X = vectorizer.transform([text])
 
-            model, vectorizer = load_model()
+        # Prediction
+        prediction = model.predict(X)[0]
 
-            sentiment, confidence, probabilities = (
-                predict_sentiment(
-                    text,
-                    model,
-                    vectorizer
-                )
-            )
+        # Probabilities
+        probabilities = model.predict_proba(X)[0]
+        classes = model.classes_
 
-            st.divider()
+        probability_dict = dict(zip(classes, probabilities))
 
-            st.subheader("Prediction")
+        confidence = float(np.max(probabilities)) * 100
 
-            # Sentiment display
-            if sentiment == "Negative":
+        # --------------------------------------------------
+        # DISPLAY PREDICTION
+        # --------------------------------------------------
 
-                st.error(
-                    f"🔴 {sentiment}"
-                )
+        st.markdown("### Prediction")
 
-            elif sentiment == "Positive":
+        if prediction == "negative":
+            st.error("🔴 Negative")
+        elif prediction == "positive":
+            st.success("🟢 Positive")
+        else:
+            st.info("⚪ Neutral")
 
-                st.success(
-                    f"🟢 {sentiment}"
-                )
+        st.metric(
+            "Model Probability",
+            f"{confidence:.2f}%"
+        )
 
-            else:
+        # --------------------------------------------------
+        # PROBABILITIES
+        # --------------------------------------------------
 
-                st.info(
-                    f"🔵 {sentiment}"
-                )
+        st.markdown("### Class Probabilities")
 
-            st.metric(
-                "Model Confidence",
-                f"{confidence:.2f}%"
-            )
+        negative = probability_dict.get("negative", 0) * 100
+        neutral = probability_dict.get("neutral", 0) * 100
+        positive = probability_dict.get("positive", 0) * 100
 
-            st.divider()
+        st.write(f"**Negative:** {negative:.2f}%")
+        st.progress(float(negative / 100))
 
-            # Probability breakdown
-            st.subheader(
-                "Class Probabilities"
-            )
+        st.write(f"**Neutral:** {neutral:.2f}%")
+        st.progress(float(neutral / 100))
 
-            labels = [
-                "Negative",
-                "Neutral",
-                "Positive"
-            ]
+        st.write(f"**Positive:** {positive:.2f}%")
+        st.progress(float(positive / 100))
 
-            for label, probability in zip(
-                labels,
-                probabilities
-            ):
+        # --------------------------------------------------
+        # CONFIDENCE INTERPRETATION
+        # --------------------------------------------------
 
-                value = probability.item()
+        if confidence >= 70:
+            st.success("High model probability")
+        elif confidence >= 50:
+            st.warning("Moderate model probability")
+        else:
+            st.warning("Low model probability — the model is uncertain.")
 
-                st.write(
-                    f"**{label}:** "
-                    f"{value * 100:.2f}%"
-                )
-
-                st.progress(
-                    min(value, 1.0)
-                )
-
-        except Exception as e:
-
-            st.error(
-                "An error occurred while "
-                "loading the model."
-            )
-
-            st.exception(e)
-
-
-# ============================================================
+# --------------------------------------------------
 # FOOTER
-# ============================================================
+# --------------------------------------------------
 
 st.divider()
 
