@@ -1,0 +1,4 @@
+Experiment,Accuracy,Precision,Recall,F1
+Centralized,0.8182,0.8184,0.8182,0.8182
+IID Federated,0.8182,0.8183,0.8182,0.8182
+Non-IID Federated,0.8153,0.8154,0.8153,0.8153

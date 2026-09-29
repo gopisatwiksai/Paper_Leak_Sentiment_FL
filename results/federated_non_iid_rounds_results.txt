@@ -1,0 +1,66 @@
+
+PAPER LEAK SENTIMENT ANALYSIS
+NON-IID FEDERATED LEARNING
+ROUND-BY-ROUND RESULTS
+=======================
+
+Dataset:
+data/processed/paper_leak_sentiment_100k.csv
+
+Total samples:
+100,000
+
+Unique incidents:
+110
+
+Training incidents:
+88
+
+Test incidents:
+22
+
+Incident overlap:
+0
+
+Training samples:
+79,917
+
+Test samples:
+20,083
+
+Federated clients:
+5
+
+Federated rounds:
+5
+
+Local epochs:
+2
+
+Learning rate:
+0.05
+
+Dirichlet alpha:
+0.5
+
+Model:
+PyTorch Linear Softmax Classifier
+
+Aggregation:
+Federated Averaging (FedAvg)
+
+Data distribution:
+Non-IID Dirichlet allocation
+
+Device:
+cpu
+
+ROUND RESULTS
+=============
+
+ round  accuracy  precision   recall       f1
+     1  0.583180   0.684792 0.583180 0.491679
+     2  0.716875   0.737357 0.716875 0.707789
+     3  0.785739   0.787675 0.785739 0.785079
+     4  0.810238   0.810252 0.810238 0.810214
+     5  0.815316   0.815389 0.815316 0.815324
